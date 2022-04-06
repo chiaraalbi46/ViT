@@ -1,9 +1,7 @@
 from comet_ml import Experiment
 import os.path
 import torch
-import torchvision
-import torchvision.transforms as transforms
-from torch.utils.data import random_split
+from get_dataset_dataloaders import get_dataset
 import argparse
 import pickle
 import numpy as np
@@ -18,9 +16,17 @@ if __name__ == '__main__':
                         help="number of attention weights savings during train")
     parser.add_argument("--batch_size", dest="batch_size", default=250, help="Batch size")
     parser.add_argument("--lr", dest="lr", default=0.001, help="learning rate train")
+    parser.add_argument("--weight_decay", dest="weight_decay", default=0.1, help="weight decay")
+    parser.add_argument("--scheduling", dest="scheduling", default=0,
+                        help="1 if scheduling lr policy applied, 0 otherwise")
     parser.add_argument("--drop", dest="drop", default=0.0, help="dropout value train")
-    # parser.add_argument("--opt", dest="opt", default=None, help="optimizer")
     parser.add_argument("--val_perc", dest="val_perc", default=30, help="% validation set")
+
+    # rand augmentation
+    parser.add_argument("--rand_aug_numops", dest="rand_aug_numops", default=None,
+                        help="number of augmentation transformations to apply sequentially")
+    parser.add_argument("--rand_aug_magn", dest="rand_aug_magn", default=None,
+                        help="magnitude for all the transformations")
 
     # iperparametri ViT
     parser.add_argument("--img_size", dest="img_size", default=32, help="size of the images (int))")
@@ -32,7 +38,8 @@ if __name__ == '__main__':
     parser.add_argument("--num_layers", dest="num_layers", default=7,
                         help="number of layers (blocks) of transformer encoder")
     parser.add_argument("--num_classes", dest="num_classes", default=100, help="number of classes of the dataset")
-    parser.add_argument("--fine_tuning", dest="fine_tuning", default=False, help="fine tuning a pretrained net")
+    parser.add_argument("--fine_tuning", dest="fine_tuning", default=0,
+                        help="1 fine tuning a pretrained net, 0 otherwise")
 
     parser.add_argument("--device", dest="device", default='0', help="choose GPU")
     parser.add_argument("--name_proj", dest="name_proj", default='VIT',
@@ -44,36 +51,49 @@ if __name__ == '__main__':
 
     # parser.add_argument("--atn_path", dest="atn_path", default=None,
     #                     help="path to the folder where storing the attention weights")
-    # parser.add_argument("--weights_path", dest="weights_path", default=None,
-    #                     help="path to the folder where storing the model weights")
+    parser.add_argument("--weights_path", dest="weights_path", default=None,
+                        help="path to the folder where storing the model weights")
     parser.add_argument("--dataset", dest="dataset", default='../Vit_vs_mlp_mixer/datasets/cifar100',
                         help="path to the dataset folder (where train, test, meta are located)")  # './cifar100_data'
 
     args = parser.parse_args()
 
+    if int(args.fine_tuning) == 1:
+        print("ciao")
+        print(type(args.fine_tuning))
+
     # Iperparametri
-    batch_size = int(args.batch_size)  # 250
+    batch_size = int(args.batch_size)
     num_epochs = int(args.epochs)
     plot_step = int(args.plot_step)
     num_plots = int(num_epochs / plot_step)
     lr = float(args.lr)
+    wd = float(args.weight_decay)
+    sched = int(args.scheduling)
     dropout_value = float(args.drop)
-    fine_tuning = bool(args.fine_tuning)
+    fine_tuning = int(args.fine_tuning)
+    numops = args.rand_aug_numops if args.rand_aug_numops is None else int(args.rand_aug_numops)
+    magn = args.rand_aug_magn if args.rand_aug_magn is None else int(args.rand_aug_magn)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print("Device: ", device)
 
     hyper_params = {
+        "img_size": int(args.img_size),
         "batch_size": batch_size,
         "num_epochs": num_epochs,
         "learning_rate": lr,
+        "weight_decay": wd,
+        "scheduling": sched,
         "dropout_value": dropout_value,
         "patch_size": int(args.patch_size),
         "num_layers": int(args.num_layers),
         "embed_dim": int(args.embed_dim),
         "hidden_dim": int(args.hidden_dim),
         "num_heads": int(args.num_heads),
-        "fine_tuning": fine_tuning
+        "fine_tuning": fine_tuning,
+        "rand_aug_numops": numops,
+        "rand_aug_magn": magn
     }
 
     # comet ml integration
@@ -85,45 +105,35 @@ if __name__ == '__main__':
               num_heads=hyper_params['num_heads'], num_layers=hyper_params['num_layers'],
               num_classes=int(args.num_classes), patch_size=hyper_params['patch_size'],
               hidden_dim=hyper_params['hidden_dim'], dropout_value=hyper_params['dropout_value'],
-              fine_tuning=fine_tuning)
+              fine_tuning=hyper_params['fine_tuning'])
 
     experiment.log_parameters(hyper_params)
     experiment.set_model_graph(vit)
 
-    # save_weights_path = os.path.join(args.weights_path, args.name_exp)
-    # if not os.path.exists(save_weights_path):
-    #     os.makedirs(save_weights_path)
-    # print("save weights: ", save_weights_path)
-    #
+    save_weights_path = os.path.join(args.weights_path, args.name_exp)
+    if not os.path.exists(save_weights_path):
+        os.makedirs(save_weights_path)
+    print("save weights: ", save_weights_path)
+
     # atn_weights_path = os.path.join(args.atn_path, args.name_exp)
     # if not os.path.exists(atn_weights_path):
     #     os.makedirs(atn_weights_path)
     # print("atn weights: ", atn_weights_path)
 
-    transform = transforms.Compose(
-        [transforms.ToTensor()])
-
-    # Dataset and dataloaders
-    if 'cifar100' in args.dataset:
-        print("CIFAR 100")
-        dataset = torchvision.datasets.CIFAR100(root=args.dataset, train=True, download=False, transform=transform)
-        test_set = torchvision.datasets.CIFAR100(root=args.dataset, train=False, download=False, transform=transform)
-    else:
-        print("CIFAR 10")
-        dataset = torchvision.datasets.CIFAR10(root=args.dataset, train=True, download=False, transform=transform)
-        test_set = torchvision.datasets.CIFAR10(root=args.dataset, train=False, download=False, transform=transform)
-
-    val_size = round((int(args.val_perc) / 100) * len(dataset))
-    train_size = len(dataset) - val_size
-
-    train_set, validation_set = random_split(dataset, [train_size, val_size])
-
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True)
-    validation_loader = torch.utils.data.DataLoader(validation_set, batch_size=batch_size, shuffle=False)
-    test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False)
+    # Dataset, dataloaders
+    train_loader, validation_loader = get_dataset(ds=args.dataset, hyperparams=hyper_params,
+                                                  val_perc=int(args.val_perc))
 
     # Definizione ottimizzatore
-    optimizer = torch.optim.Adam(vit.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(vit.parameters(), lr=lr, weight_decay=wd)
+
+    if sched == 1:
+        print("Scheduling of learning rate applied")
+        # Definizione scheduler
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer=optimizer, max_lr=lr, pct_start=0.05,
+                                                        total_steps=len(train_loader) * num_epochs,
+                                                        anneal_strategy='linear')
+        # anche pct_start dovrebbe essere iperparametro ...
 
     # Definizione loss
     loss = torch.nn.CrossEntropyLoss()
@@ -184,6 +194,16 @@ if __name__ == '__main__':
             # update weights
             optimizer.step()
 
+            rl = optimizer.param_groups[0]["lr"]
+            # experiment.log_metric('learning_rate_batch_sched', rl, step=it)
+
+            if sched == 1:
+                # rl = scheduler.get_last_lr()  # anche optimizer.param_groups[0]["lr"] va bene
+                # # experiment.log_metric('learning_rate_batch_sched', rl, step=it)
+                scheduler.step()
+
+        experiment.log_metric('learning_rate_epoch', rl, step=epoch + 1)  # the last batch learning rate
+
         # Validation step
         print()
 
@@ -212,7 +232,10 @@ if __name__ == '__main__':
             epoch + 1, sum(train_losses) / len(train_losses), sum(val_losses) / len(val_losses)))
 
         # Save weights
-        # torch.save(vit.state_dict(), save_weights_path + '/weights_' + str(epoch + 1) + '.pth')
+        if epoch % 10 == 0:
+            torch.save(vit.state_dict(), save_weights_path + '/weights_' + str(epoch + 1) + '.pth')
+
+    torch.save(vit.state_dict(), save_weights_path + f"final.pth")
 
     experiment.end()
     print("End training loop")
@@ -220,3 +243,4 @@ if __name__ == '__main__':
     # Ex: python main.py --epochs 12 --dataset  C:\Users\chiar\PycharmProjects\ViT\cifar100_data --num_heads 12
     # --hidden_dim 384 --batch_size 128 --num_classes 100 --name_exp cifar100_tanh
     # --comments 'mlp head with tanh (no layer norm)'
+

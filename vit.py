@@ -218,8 +218,8 @@ class ViT(nn.Module):
     dropout_value: float
              Amount of dropout to apply in the ff network and on the input encoding (after positional encoding)
 
-    fine_tuning: bool
-            True if fine-tuning, False otherwise (pre-training)
+    fine_tuning: int
+            1 if fine-tuning, 0 otherwise (pre-training)
 
     Attributes
     ----------
@@ -231,7 +231,7 @@ class ViT(nn.Module):
     """
 
     def __init__(self, img_size, embed_dim, num_channels, num_heads, num_layers, num_classes,
-                 patch_size, hidden_dim, dropout_value=0.0, fine_tuning=False):
+                 patch_size, hidden_dim, dropout_value=0.0, fine_tuning=0):
         super(ViT, self).__init__()
 
         self.patch_size = patch_size
@@ -261,7 +261,7 @@ class ViT(nn.Module):
             nn.Linear(embed_dim, num_classes)
         )
 
-        if fine_tuning:
+        if fine_tuning == 1:
             self.mlp_head = nn.Linear(embed_dim, num_classes)
 
         self.dropout = nn.Dropout(dropout_value)

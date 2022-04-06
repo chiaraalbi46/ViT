@@ -21,6 +21,11 @@ def try_vit(plot=False):
     transform = transforms.Compose(
         [transforms.ToTensor()])  # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 
+    # with rand augmentation
+    # transform = transforms.Compose([
+    #     transforms.RandAugment(num_ops=2, magnitude=10),
+    #     transforms.ToTensor()])
+
     trainset = torchvision.datasets.CIFAR100(root='./cifar100_data', train=True, download=False, transform=transform)
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True)
 
@@ -43,8 +48,8 @@ def try_vit(plot=False):
         # print labels
         print(' '.join(f'{fine_labels[labels[j]]:5s}' for j in range(batch_size)))
 
-        patch_embed = PatchEmbedding(img_size=(32, 32), in_chans=3, patch_size=8, embed_dim=60)
-        le = patch_embed(images, plot=True)  # batch_size, n_tokens, embed_dim
+        # patch_embed = PatchEmbedding(img_size=(32, 32), in_chans=3, patch_size=8, embed_dim=60)
+        # le = patch_embed(images, plot=True)  # batch_size, n_tokens, embed_dim
 
         # torchvision.utils.make_grid(sample_batched[0]) resituisce un tensore (3, 36, 138)
         # dove 36 = 32 + 2 + 2 (width di un'immagine più i margini )
@@ -127,6 +132,7 @@ if __name__ == '__main__':
     # le = patch_embed(im_rgb, plot=True)  # 1, 16, 50
 
     o, atn_wl = try_vit(plot=True)
+    # try_vit(plot=True)
 
 
 
