@@ -12,7 +12,7 @@ def get_dataset(ds, hyperparams, val_perc):
         [transforms.ToTensor()])
 
     if hyperparams['rand_aug_numops'] is not None and hyperparams['rand_aug_magn'] is not None:
-        print("Add Rand Augmentation")
+        print("Add Rand Augmentation on train set")
         transform = transforms.Compose([
             transforms.RandAugment(num_ops=int(hyperparams['rand_aug_numops']),
                                    magnitude=int(hyperparams['rand_aug_magn'])),
@@ -79,6 +79,50 @@ def get_dataset(ds, hyperparams, val_perc):
             "Test loader len must be equal to len(test_dataset) / batch_size"
 
     return train_loader, test_loader
+
+
+def get_dataset_fine_tuning(ds, hyperparams):
+    # no rand augmentation on test set
+    test_transform = transforms.Compose([
+        transforms.Resize([64, 64]),  # need this because imagenet pretraining is on 64x64 images
+        transforms.ToTensor()])
+
+    train_transform = transforms.Compose([
+            transforms.Resize([64, 64]),  # need this because imagenet pretraining is on 64x64 images
+            transforms.ToTensor()])
+
+    if hyperparams['rand_aug_numops'] is not None and hyperparams['rand_aug_magn'] is not None:
+        print("Add Rand Augmentation on train set")
+        train_transform = transforms.Compose([
+            transforms.RandAugment(num_ops=int(hyperparams['rand_aug_numops']),
+                                   magnitude=int(hyperparams['rand_aug_magn'])),
+            transforms.Resize([64, 64]),
+            transforms.ToTensor()])
+
+    if 'cifar' in ds:
+        if 'cifar100' in ds:
+            print("CIFAR 100")
+            dataset = torchvision.datasets.CIFAR100(root=ds, train=True, download=False, transform=train_transform)
+            test_set = torchvision.datasets.CIFAR100(root=ds, train=False, download=False,
+                                                     transform=test_transform)
+        else:
+            print("CIFAR 10")
+            dataset = torchvision.datasets.CIFAR10(root=ds, train=True, download=False, transform=train_transform)
+            test_set = torchvision.datasets.CIFAR10(root=ds, train=False, download=False,
+                                                    transform=test_transform)
+
+        print("No validation set used")
+        train_loader = torch.utils.data.DataLoader(dataset, batch_size=hyperparams['batch_size'], shuffle=True)
+        test_loader = torch.utils.data.DataLoader(test_set, batch_size=hyperparams['batch_size'], shuffle=False)
+
+        # Test correctness
+        assert (math.ceil(len(dataset) / hyperparams['batch_size']) == len(train_loader)), \
+            "Train loader len must be equal to len(dataset) / batch_size"
+
+        assert (math.ceil(len(test_set) / hyperparams['batch_size']) == len(test_loader)), \
+            "Test loader len must be equal to len(test_dataset) / batch_size"
+
+        return train_loader, test_loader
 
 
 if __name__ == '__main__':

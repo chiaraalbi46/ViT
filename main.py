@@ -38,16 +38,11 @@ if __name__ == '__main__':
     parser.add_argument("--num_layers", dest="num_layers", default=7,
                         help="number of layers (blocks) of transformer encoder")
     parser.add_argument("--num_classes", dest="num_classes", default=100, help="number of classes of the dataset")
-    parser.add_argument("--fine_tuning", dest="fine_tuning", default=0,
-                        help="1 fine tuning a pretrained net, 0 otherwise")
 
     parser.add_argument("--device", dest="device", default='0', help="choose GPU")
-    parser.add_argument("--name_proj", dest="name_proj", default='VIT',
-                        help="define comet ml project folder")
-    parser.add_argument("--name_exp", dest="name_exp", default='None',
-                        help="define comet ml experiment")
-    parser.add_argument("--comments", dest="comments", default=None,
-                        help="comments (str) about the experiment")
+    parser.add_argument("--name_proj", dest="name_proj", default='VIT', help="define comet ml project folder")
+    parser.add_argument("--name_exp", dest="name_exp", default='None', help="define comet ml experiment")
+    parser.add_argument("--comments", dest="comments", default=None, help="comments (str) about the experiment")
 
     # parser.add_argument("--atn_path", dest="atn_path", default=None,
     #                     help="path to the folder where storing the attention weights")
@@ -58,10 +53,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if int(args.fine_tuning) == 1:
-        print("ciao")
-        print(type(args.fine_tuning))
-
     # Iperparametri
     batch_size = int(args.batch_size)
     num_epochs = int(args.epochs)
@@ -71,7 +62,6 @@ if __name__ == '__main__':
     wd = float(args.weight_decay)
     sched = int(args.scheduling)
     dropout_value = float(args.drop)
-    fine_tuning = int(args.fine_tuning)
     numops = args.rand_aug_numops if args.rand_aug_numops is None else int(args.rand_aug_numops)
     magn = args.rand_aug_magn if args.rand_aug_magn is None else int(args.rand_aug_magn)
 
@@ -91,7 +81,6 @@ if __name__ == '__main__':
         "embed_dim": int(args.embed_dim),
         "hidden_dim": int(args.hidden_dim),
         "num_heads": int(args.num_heads),
-        "fine_tuning": fine_tuning,
         "rand_aug_numops": numops,
         "rand_aug_magn": magn
     }
@@ -104,8 +93,7 @@ if __name__ == '__main__':
     vit = ViT(img_size=int(args.img_size), embed_dim=hyper_params['embed_dim'], num_channels=3,
               num_heads=hyper_params['num_heads'], num_layers=hyper_params['num_layers'],
               num_classes=int(args.num_classes), patch_size=hyper_params['patch_size'],
-              hidden_dim=hyper_params['hidden_dim'], dropout_value=hyper_params['dropout_value'],
-              fine_tuning=hyper_params['fine_tuning'])
+              hidden_dim=hyper_params['hidden_dim'], dropout_value=hyper_params['dropout_value'])
 
     experiment.log_parameters(hyper_params)
     experiment.set_model_graph(vit)
