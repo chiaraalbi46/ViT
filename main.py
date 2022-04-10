@@ -16,11 +16,11 @@ if __name__ == '__main__':
                         help="number of attention weights savings during train")
     parser.add_argument("--batch_size", dest="batch_size", default=250, help="Batch size")
     parser.add_argument("--lr", dest="lr", default=0.001, help="learning rate train")
-    parser.add_argument("--weight_decay", dest="weight_decay", default=0.1, help="weight decay")
+    parser.add_argument("--weight_decay", dest="weight_decay", default=0., help="weight decay")
     parser.add_argument("--scheduling", dest="scheduling", default=0,
                         help="1 if scheduling lr policy applied, 0 otherwise")
     parser.add_argument("--drop", dest="drop", default=0.0, help="dropout value train")
-    parser.add_argument("--val_perc", dest="val_perc", default=30, help="% validation set")
+    parser.add_argument("--val_perc", dest="val_perc", default=0, help="% validation set")
 
     # rand augmentation
     parser.add_argument("--rand_aug_numops", dest="rand_aug_numops", default=None,
@@ -190,7 +190,8 @@ if __name__ == '__main__':
                 # # experiment.log_metric('learning_rate_batch_sched', rl, step=it)
                 scheduler.step()
 
-        experiment.log_metric('learning_rate_epoch', rl, step=epoch + 1)  # the last batch learning rate
+        if sched == 1:
+            experiment.log_metric('learning_rate_epoch', rl, step=epoch + 1)  # the last batch learning rate
 
         # Validation step
         print()
