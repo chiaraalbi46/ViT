@@ -101,6 +101,101 @@ def plot_embed_patches(embedded_patches, n_images=None):
     plt.close()
 
 
+def get_pretrained_model(weights_path, weight_epoch):  # './fine_tuning_vit_cifar100', 71
+    # weights_path: il path alla cartella che contiene i pesi di un certo esperimento e il dizionario degli iperparm
+    # associati a quell'esperimento
+    # weight epoch: epoca a cui recupero i pesi del modello
+    import torch
+    import json
+    from vit import ViT
+
+    """ Returns a pretrained model, given the path to the weights and the specific index of the epoch 
+    at which recover them.
+
+    Parameters
+    ----------
+    weights_path : str
+            Path to the folder that contains the weights of the model we want to build
+
+    weight_epoch : int
+            Index of the epoch at which recover the weights
+    """
+
+    print(weights_path)
+    with open(weights_path + '/hyperparams.json') as json_file:
+        hyper_params = json.load(json_file)
+
+    # Definizione modello
+    model = ViT(img_size=hyper_params['img_size'], embed_dim=hyper_params['embed_dim'], num_channels=3,
+                num_heads=hyper_params['num_heads'], num_layers=hyper_params['num_layers'],
+                num_classes=hyper_params['num_classes'], patch_size=hyper_params['patch_size'],
+                hidden_dim=hyper_params['hidden_dim'], dropout_value=hyper_params['dropout_value'])
+
+    # print(model)
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    if device == 'cpu':
+        model.load_state_dict(torch.load(weights_path + '/weights_' + str(weight_epoch) + '.pth',
+                                         map_location='cpu'))
+    else:
+        model.load_state_dict(torch.load(weights_path + '/weights_' + str(weight_epoch) + '.pth'))
+
+    model.to(device)
+    return model, device
+
+
+def get_fine_tuned_model(weights_path, weight_epoch, num_classes=100):  # './fine_tuning_vit_cifar100', 71
+    # weights_path: il path alla cartella che contiene i pesi di un certo esperimento e il dizionario degli iperparm
+    # associati a quell'esperimento
+    # weight epoch: epoca a cui recupero i pesi del modello
+    import torch
+    import json
+    from vit import ViT
+
+    """ Returns a fine tuned model, given the path to the weights and the specific index of the epoch 
+        at which recover them.
+
+    Parameters
+    ----------
+    weights_path : str
+            Path to the folder that contains the weights of the model we want to build
+
+    weight_epoch : int
+            Index of the epoch at which recover the weights
+    
+    num_classes : int
+            Number of classes of the dataset on which the model is fine tuned
+    """
+
+    print("Fine tuning ON")
+    print(weights_path)
+    with open(weights_path + '/hyperparams.json') as json_file:
+        hyper_params = json.load(json_file)
+
+    # Definizione modello
+    model = ViT(img_size=hyper_params['img_size'], embed_dim=hyper_params['embed_dim'], num_channels=3,
+                num_heads=hyper_params['num_heads'], num_layers=hyper_params['num_layers'],
+                num_classes=hyper_params['num_classes'], patch_size=hyper_params['patch_size'],
+                hidden_dim=hyper_params['hidden_dim'], dropout_value=hyper_params['dropout_value'])
+
+    # print(model)
+    # model.eval()
+    num_in_features = model.embed_dim
+    # add new learnable linear layer
+    model.mlp_head = torch.nn.Linear(num_in_features, num_classes)
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    if device == 'cpu':
+        model.load_state_dict(torch.load(weights_path + '/weights_' + str(weight_epoch) + '.pth',
+                                         map_location='cpu'))
+    else:
+        model.load_state_dict(torch.load(weights_path + '/weights_' + str(weight_epoch) + '.pth'))
+
+    model.to(device)
+    return model, device
+
+
 if __name__ == '__main__':
     from vit import ViT
     from embeddings import PatchEmbedding

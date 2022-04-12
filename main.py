@@ -4,6 +4,7 @@ import torch
 from get_dataset_dataloaders import get_dataset
 import argparse
 import pickle
+import json
 import numpy as np
 from vit import ViT
 
@@ -44,8 +45,8 @@ if __name__ == '__main__':
     parser.add_argument("--name_exp", dest="name_exp", default='None', help="define comet ml experiment")
     parser.add_argument("--comments", dest="comments", default=None, help="comments (str) about the experiment")
 
-    # parser.add_argument("--atn_path", dest="atn_path", default=None,
-    #                     help="path to the folder where storing the attention weights")
+    parser.add_argument("--atn_path", dest="atn_path", default=None,
+                        help="path to the folder where storing the attention weights")
     parser.add_argument("--weights_path", dest="weights_path", default=None,
                         help="path to the folder where storing the model weights")
     parser.add_argument("--dataset", dest="dataset", default='../Vit_vs_mlp_mixer/datasets/cifar100',
@@ -103,10 +104,14 @@ if __name__ == '__main__':
         os.makedirs(save_weights_path)
     print("save weights: ", save_weights_path)
 
-    # atn_weights_path = os.path.join(args.atn_path, args.name_exp)
-    # if not os.path.exists(atn_weights_path):
-    #     os.makedirs(atn_weights_path)
-    # print("atn weights: ", atn_weights_path)
+    # save hyperparams dictionary in save_weights_path
+    with open(save_weights_path + '/hyperparams.json', "w") as outfile:
+        json.dump(hyper_params, outfile, indent=4)
+
+    atn_weights_path = os.path.join(args.atn_path, args.name_exp)
+    if not os.path.exists(atn_weights_path):
+        os.makedirs(atn_weights_path)
+    print("atn weights: ", atn_weights_path)
 
     # Dataset, dataloaders
     train_loader, validation_loader = get_dataset(ds=args.dataset, hyperparams=hyper_params,
@@ -118,9 +123,12 @@ if __name__ == '__main__':
     if sched == 1:
         print("Scheduling of learning rate applied")
         # Definizione scheduler
-        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer=optimizer, max_lr=lr, pct_start=0.05,
+        # ws = 10000
+        # pct_start = ws / (len(train_loader) * num_epochs)
+        # print("pct start: ", pct_start)
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer=optimizer, max_lr=lr, pct_start=0.05,  # 0.05
                                                         total_steps=len(train_loader) * num_epochs,
-                                                        anneal_strategy='linear')
+                                                        anneal_strategy='cos')
         # anche pct_start dovrebbe essere iperparametro ...
 
     # Definizione loss
@@ -144,9 +152,9 @@ if __name__ == '__main__':
     for epoch in range(num_epochs):
         vit.train()  # Sets the module in training mode
 
-        # if epoch == 0 or (epoch + 1) % num_plots == 0:
-        #     print("Save the attention weights of the first batch")
-        #     atn_save = True
+        if epoch == 0 or (epoch + 1) % num_plots == 0:
+            print("Save the attention weights of the first batch")
+            atn_save = True
 
         # batch training
         train_losses = []
@@ -165,7 +173,7 @@ if __name__ == '__main__':
             # if it == 0 and atn_save:
             #     print("Saving ")
             #     f = open(os.path.join(atn_weights_path, 'atn_epoch_' + str(epoch) + '_it_0' + '.pckl'), 'wb')
-            #     pickle.dump([atn_weights_list], f)
+            #     pickle.dump(atn_weights_list, f)
             #     f.close()
             #     atn_save = False
 
@@ -202,7 +210,14 @@ if __name__ == '__main__':
                 val_images = val_batch[0].to(device)
                 val_labels = val_batch[1].to(device)
 
-                val_out, _ = vit(val_images)
+                val_out, val_atn_weights_list = vit(val_images)
+
+                if val_it == 0 and atn_save:
+                    print("Saving val atn weights list")
+                    f = open(os.path.join(atn_weights_path, 'atn_epoch_' + str(epoch) + '_it_0' + '.pckl'), 'wb')
+                    pickle.dump(val_atn_weights_list, f)
+                    f.close()
+                    atn_save = False
 
                 val_loss = loss(val_out, val_labels)
                 val_losses.append(val_loss.item())
@@ -224,7 +239,7 @@ if __name__ == '__main__':
         if epoch % 10 == 0:
             torch.save(vit.state_dict(), save_weights_path + '/weights_' + str(epoch + 1) + '.pth')
 
-    torch.save(vit.state_dict(), save_weights_path + f"final.pth")
+    torch.save(vit.state_dict(), save_weights_path + '/final.pth')
 
     experiment.end()
     print("End training loop")

@@ -9,6 +9,7 @@ import argparse
 import numpy as np
 import os
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Fine tuning")
 
@@ -35,9 +36,16 @@ if __name__ == '__main__':
     #                     help="number of attention weights savings during train")
     parser.add_argument("--batch_size", dest="batch_size", default=250, help="Batch size")
     parser.add_argument("--lr", dest="lr", default=0.001, help="learning rate train")
-    parser.add_argument("--weight_decay", dest="weight_decay", default=0.1, help="weight decay")
+    parser.add_argument("--weight_decay", dest="weight_decay", default=0., help="weight decay")
     parser.add_argument("--scheduling", dest="scheduling", default=0,
                         help="1 if scheduling lr policy applied, 0 otherwise")
+    parser.add_argument("--drop", dest="drop", default=0., help="dropout value train")
+
+    # rand augmentation
+    parser.add_argument("--rand_aug_numops", dest="rand_aug_numops", default=None,
+                        help="number of augmentation transformations to apply sequentially")
+    parser.add_argument("--rand_aug_magn", dest="rand_aug_magn", default=None,
+                        help="magnitude for all the transformations")
 
     args = parser.parse_args()
 
@@ -64,6 +72,9 @@ if __name__ == '__main__':
     lr = float(args.lr)
     wd = float(args.weight_decay)
     sched = int(args.scheduling)
+    dropout_value = float(args.drop)
+    numops = args.rand_aug_numops if args.rand_aug_numops is None else int(args.rand_aug_numops)
+    magn = args.rand_aug_magn if args.rand_aug_magn is None else int(args.rand_aug_magn)
 
     hyper_params_ft = {
         "img_size": hyper_params['img_size'],
@@ -72,20 +83,25 @@ if __name__ == '__main__':
         "learning_rate": lr,
         "weight_decay": wd,
         "scheduling": sched,
+        "dropout_value": dropout_value,
         "patch_size": hyper_params['patch_size'],
         "num_layers": hyper_params['num_layers'],
         "embed_dim": hyper_params['embed_dim'],
         "hidden_dim": hyper_params['hidden_dim'],
         "num_heads": hyper_params['num_heads'],
-        "rand_aug_numops": hyper_params['rand_aug_numops'],  # todo: mettere come parametri in input
-        "rand_aug_magn": hyper_params['rand_aug_magn']
+        "rand_aug_numops": numops,
+        "rand_aug_magn": magn
     }
+
+    # save hyperparams dictionary in save_weights_path
+    with open(save_weights_path + '/hyperparams.json', "w") as outfile:
+        json.dump(hyper_params, outfile, indent=4)
 
     # Definizione modello
     model = ViT(img_size=hyper_params['img_size'], embed_dim=hyper_params['embed_dim'], num_channels=3,
                 num_heads=hyper_params['num_heads'], num_layers=hyper_params['num_layers'],
                 num_classes=hyper_params['num_classes'], patch_size=hyper_params['patch_size'],
-                hidden_dim=hyper_params['hidden_dim'], dropout_value=0.0)  # no dropout on fine tuning
+                hidden_dim=hyper_params['hidden_dim'], dropout_value=hyper_params_ft['dropout_value'])
 
     # print(model)
 
@@ -126,7 +142,7 @@ if __name__ == '__main__':
         # cosine for fine tuning
         scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer=optimizer, max_lr=lr, pct_start=0.05,
                                                         total_steps=len(train_loader) * num_epochs,
-                                                        anneal_strategy='cosine')
+                                                        anneal_strategy='cos')
         # anche pct_start dovrebbe essere iperparametro ...
 
     # Definizione loss
@@ -190,7 +206,8 @@ if __name__ == '__main__':
                 # # experiment.log_metric('learning_rate_batch_sched', rl, step=it)
                 scheduler.step()
 
-        experiment.log_metric('learning_rate_epoch', rl, step=epoch + 1)  # the last batch learning rate
+        if sched == 1:
+            experiment.log_metric('learning_rate_epoch', rl, step=epoch + 1)  # the last batch learning rate
 
         # Validation step
         print()
@@ -231,3 +248,12 @@ if __name__ == '__main__':
     # Ex: python fine_tune.py --weight_epoch 151 --dataset C:\Users\chiar\PycharmProjects\ViT\cifar100_data --num_classes 100
     # --exp pretraining_imagenet --comments 'fine tuning on CIFAR 100' --name_exp ft_cifar100 --batch_size 250
     # --lr 0.001 --weight_decay 0.0001 --epochs 200
+
+
+
+
+
+
+
+
+
