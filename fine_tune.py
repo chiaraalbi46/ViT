@@ -1,4 +1,4 @@
-""" Test a model. Fine tuning is also possible. """
+""" Fine tune a pretrained model. """
 
 from comet_ml import Experiment
 import torch

@@ -67,13 +67,13 @@ def plot_embed_patches(embedded_patches, n_images=None):
 
     """ Plot patches for the dataset images.
 
-        Parameters
-        ----------
-        embedded_patches : torch.tensor
-                Embedded patches
+    Parameters
+    ----------
+    embedded_patches : torch.tensor
+            Embedded patches
 
-        n_images : int
-                Number of the images whose patches we want to plot
+    n_images : int
+            Number of the images whose patches we want to plot
 
     """
     b, n = embedded_patches.shape[0], embedded_patches.shape[1]  # batch size, number of patches
@@ -102,7 +102,7 @@ def plot_embed_patches(embedded_patches, n_images=None):
 
 
 def get_pretrained_model(weights_path, weight_epoch):  # './fine_tuning_vit_cifar100', 71
-    # weights_path: il path alla cartella che contiene i pesi di un certo esperimento e il dizionario degli iperparm
+    # weights_path: il path alla cartella che contiene i pesi di un certo esperimento e il dizionario degli iperparam
     # associati a quell'esperimento
     # weight epoch: epoca a cui recupero i pesi del modello
     import torch

@@ -1,10 +1,4 @@
-
-# todo: conviene salvare il batch delle immagini di cui salvo gli attention weights. nel training il problema è che per
-#  una stessa iterazione fissata non ritroverò lo stesso batch... quindi non posso tracciare l'andamento (cioè vedere
-#  come cambiano in pesi nel corso delle epoche su una stessa immagine) ... questa cosa la posso fare quando testo il
-#  modello / quando faccio validation perchè in quel caso trovo lo stesso batch (shuffle=False)
-
-# todo: mettere argparse o comunque gestirla meglio ... quando ho cifar10
+""" Attention weights plot: Heads visualizationa and Attention rollout"""
 
 def function():  # eventualmente per storico ... prende in ingresso i pckl, so l'iterazione, so l'epoca ...
     import torch
@@ -96,7 +90,7 @@ def function():  # eventualmente per storico ... prende in ingresso i pckl, so l
 
 
 # https://github.com/jacobgil/vit-explain/blob/main/vit_rollout.py
-def rollout(attentions, batch_index, filter=0, discard_ratio=0.9, head_fusion='mean'):
+def rollout(attentions, batch_index, discard_ratio=0.0, head_fusion='mean'):
     import numpy as np
     import torch
 
@@ -109,9 +103,6 @@ def rollout(attentions, batch_index, filter=0, discard_ratio=0.9, head_fusion='m
 
     batch_index : int
             Index of the image in the batch tested
-
-    filter : int
-            1 if you want to drop the lowest attention weights, 0 otherwise
 
     discard_ratio : float
             % of weights to drop if filter is 1
@@ -132,7 +123,7 @@ def rollout(attentions, batch_index, filter=0, discard_ratio=0.9, head_fusion='m
             else:
                 raise "Attention head fusion type Not supported"
 
-            if filter == 1:
+            if discard_ratio > 0.0:
                 print("Drop the lowest attentions")
                 # Drop the lowest attentions, but don't drop the class token
                 flat = attention_heads_fused.view(attention_heads_fused.size(0), -1)  # b, n_tokens * n_tokens
@@ -156,7 +147,7 @@ def rollout(attentions, batch_index, filter=0, discard_ratio=0.9, head_fusion='m
     return mask
 
 
-def heads_visualization(atn_wei_list, batch_index, save_path):
+def heads_visualization(atn_wei_list, batch_index, chosen_image, save_path):
     """ Heads visualization for a single image.
 
     Parameters
@@ -167,8 +158,12 @@ def heads_visualization(atn_wei_list, batch_index, save_path):
     batch_index : int
             Index of the image in the batch tested
 
+    chosen_image: Tensor
+            Image on which plot attention weights (images[batch_index])
+
     save_path : str
-            Path to the location you want to save the plot
+            Path to the location you want to save the plot (it ends with the weight_epoch at which
+            the model is recovered)
     """
 
     # with open("./cifar100_data/cifar-100-python/meta", "rb") as f:
@@ -177,34 +172,37 @@ def heads_visualization(atn_wei_list, batch_index, save_path):
     # lab = [fine_labels[labels[j]] for j in range(batch_size)]
     # imshow(torchvision.utils.make_grid(images), labels=lab)
 
-    fig = plt.figure(figsize=(16, 8))
-    fig.suptitle("Attention heads visualization", fontsize=24)
-    im = images[batch_index]
-    chosen_image = im.permute(1, 2, 0)  # h, w, c
-    img = np.asarray(chosen_image)
-    ax = fig.add_subplot(2, 5, 1)  # 2 righe, 5 colonne
-    ax.imshow(img)
-    atn_l0 = atn_wei_list[0]  # layer 0
-    bi = atn_l0[batch_index]
+    name = save_path + '_rollout_vis_' + str(batch_index) + '.png'
 
-    # work on this
-    # fig = plt.figure(figsize=(10, 10))
-    # plt.imshow(bi[1].detach().cpu().numpy())  # una head
-    # plt.show()
+    # check if the file exists
+    if not os.path.exists(name):
+        print("heads saving")
+        fig = plt.figure(figsize=(16, 8))
+        fig.suptitle("Attention heads visualization", fontsize=24)
+        chosen_image = chosen_image.permute(1, 2, 0)  # h, w, c
+        img = np.asarray(chosen_image)
+        ax = fig.add_subplot(2, 5, 1)  # 2 righe, 5 colonne
+        ax.imshow(img)
+        atn_l0 = atn_wei_list[0]  # layer 0
+        bi = atn_l0[batch_index]
 
-    for i in range(atn_l0.size(1)):  # heads
-        attn_heatmap = bi[i, 0, 1:].reshape((8, 8)).detach().cpu().numpy()  # cls token
-        ax = fig.add_subplot(2, 5, i + 2)
-        ax.imshow(attn_heatmap)
+        # work on this
+        # fig = plt.figure(figsize=(10, 10))
+        # plt.imshow(bi[1].detach().cpu().numpy())  # una head
+        # plt.show()
 
-    # save fig
-    name = save_path + '/rollout_vis_' + str(batch_index) + '.png'
-    plt.savefig(name)
+        for i in range(atn_l0.size(1)):  # heads
+            attn_heatmap = bi[i, 0, 1:].reshape((8, 8)).detach().cpu().numpy()  # cls token
+            ax = fig.add_subplot(2, 5, i + 2)
+            ax.imshow(attn_heatmap)
 
-    # plt.show()
+        # save fig
+        plt.savefig(name)
+        # plt.show()
 
 
-def rollout_visualization(batch_index, save_path, filter=0, discard_ratio=0.9, head_fusion='min'):
+def rollout_visualization(atn_wei_list, batch_index, chosen_image, save_path, discard_ratio=0.9,
+                          head_fusion='min'):
     import cv2
     import matplotlib.pyplot as plt
 
@@ -212,14 +210,18 @@ def rollout_visualization(batch_index, save_path, filter=0, discard_ratio=0.9, h
 
     Parameters
     ----------
+    atn_wei_list: list
+            List of attention weights (len(atn_wei_list) = number of layers of the model)
+            
     batch_index : int
             Index of the image in the batch tested
     
+    chosen_image: Tensor
+            Image on which plot attention weights (images[batch_index]) 
+    
     save_path : str
-            Path to the location you want to save the plot
-
-    filter : int
-            1 if you want to drop the lowest attention weights, 0 otherwise
+            Path to the location you want to save the plot (it ends with the weight_epoch at which 
+            the model is recovered)
 
     discard_ratio : float
             % of weights to drop if filter is 1
@@ -232,29 +234,35 @@ def rollout_visualization(batch_index, save_path, filter=0, discard_ratio=0.9, h
     #     retrieved_data = pickle.load(f)
     # fine_labels = retrieved_data['fine_label_names']
 
-    mask = rollout(atn_wei_list, batch_index, filter=filter, discard_ratio=discard_ratio, head_fusion=head_fusion)
-    chosen_image = images[batch_index]  # c, h, w
-    chosen_image = chosen_image.permute(1, 2, 0)  # h, w, c
-    tup = (chosen_image.shape[0], chosen_image.shape[1])
-    maski = cv2.resize(mask, tup)[..., np.newaxis]  # aggiungo dim canali  h, w, c  / mask.max()
-    resulti = (maski * chosen_image.cpu().numpy())  # .astype("uint8")
+    name = save_path + '_hf_' + head_fusion + '_heads_vis_' + str(batch_index) + '.png'
+    if filter == 1:
+        name = save_path + '_hf_' + head_fusion + '_dr' + str(discard_ratio) + '_heads_vis_' + str(batch_index) + '.png'
 
-    # lab = fine_labels[labels[batch_index]]
-    # ims = torch.stack([chosen_image, torch.from_numpy(resulti)])
-    # imshow(torchvision.utils.make_grid(ims.permute(0, 3, 1, 2)), 'attention rollout map')
+    # check if the file exists
+    if not os.path.exists(name):
+        print("rollout saving")
+        mask = rollout(atn_wei_list, batch_index, discard_ratio=discard_ratio, head_fusion=head_fusion)
+        # chosen_image = images[batch_index]  # c, h, w
+        chosen_image = chosen_image.permute(1, 2, 0)  # h, w, c
+        tup = (chosen_image.shape[0], chosen_image.shape[1])
+        maski = cv2.resize(mask, tup)[..., np.newaxis]  # aggiungo dim canali  h, w, c  / mask.max()
+        resulti = (maski * chosen_image.cpu().numpy())  # .astype("uint8")
 
-    fig, (ax1, ax2, ax3) = plt.subplots(ncols=3, figsize=(16, 16))
-    ax1.set_title('Original')
-    ax2.set_title('Attention Map')
-    ax3.set_title('Mask resized')
-    _ = ax1.imshow(chosen_image)
-    _ = ax2.imshow(resulti)
-    _ = ax3.imshow(maski)
+        # lab = fine_labels[labels[batch_index]]
+        # ims = torch.stack([chosen_image, torch.from_numpy(resulti)])
+        # imshow(torchvision.utils.make_grid(ims.permute(0, 3, 1, 2)), 'attention rollout map')
 
-    # save fig
-    name = save_path + '/heads_vis_' + str(batch_index) + '.png'  # potrei aggiungere l'epoca ...
-    plt.savefig(name)
-    # plt.show()
+        fig, (ax1, ax2, ax3) = plt.subplots(ncols=3, figsize=(16, 16))
+        ax1.set_title('Original')
+        ax2.set_title('Attention Map')
+        ax3.set_title('Mask resized')
+        _ = ax1.imshow(chosen_image)
+        _ = ax2.imshow(resulti)
+        _ = ax3.imshow(maski)
+
+        # save fig
+        plt.savefig(name)
+        # plt.show()
 
 
 if __name__ == '__main__':
@@ -266,24 +274,49 @@ if __name__ == '__main__':
     import pickle
     import numpy as np
     import os
+    import argparse
 
-    # # pretrained model
-    # wp = './model_weights/pretraining_imagenet'  # no slash
-    # we = 261
+    parser = argparse.ArgumentParser(description="Attention weights plot")
 
-    # fine tuned model
-    wp = './fine_tuning_vit_cifar100'  # weights_path
-    we = 71  # weight_epoch
+    parser.add_argument("--model_weights_path", dest="model_weights_path",
+                        default='./model_weights/pretraining_imagenet'
+                        , help="path to the folder where are stored the weights of the model in exam (no final slash)")
+    parser.add_argument("--weight_epoch", dest="weight_epoch", default=1,
+                        help="epoch at which we recover the model weights")
+    parser.add_argument("--batch_index", dest="batch_index", default=0,
+                        help="index of the image of the batch to test")
+    parser.add_argument("--atn_plot_path", dest="atn_plot_path", default='./plots/atn_weights'
+                        , help="path to the folder where the atn weights images are stored (no final slash)")
+    parser.add_argument("--batch_size", dest="batch_size", default=4, help="size of the batch for test the model")
+    parser.add_argument("--num_classes", dest="num_classes", default=100, help="number of classes of the dataset "
+                        "(we need this info only for the fine tuning model)")
+    parser.add_argument("--dataset", dest="dataset", default='./cifar100_data', help="dataset to test the model")
+    parser.add_argument("--ft", dest="ft", default=0, help="1 for fine tuned model, 0 for pretrained model")
 
-    dataset = './cifar100_data'
-    with open('./fine_tuning_vit_cifar100/hyperparams.json') as json_file:
-        hyper_params = json.load(json_file)
-    batch_size = 4
-    num_classes = 100
+    # params for rollout
+    parser.add_argument("--head_fusion", dest="head_fusion", default='mean', help="head fusion strategy "
+                                                                                  "for attention rollout")
+    parser.add_argument("--discard_ratio", dest="discard_ratio", default=0.9, help="% of atn weights to drop (float)")
 
-    # model, device = get_pretrained_model(weights_path=wp, weight_epoch=we, fine_tuning=0)
-    model, device = get_fine_tuned_model(weights_path=wp, weight_epoch=we, num_classes=num_classes)
+    args = parser.parse_args()
+
+    wp = args.model_weights_path
+    we = int(args.weight_epoch)
+    batch_index = int(args.batch_index)
+    batch_size = int(args.batch_size)
+    dataset = args.dataset
+
+    if int(args.ft) == 1:
+        print("fine tuned model")
+        model, device = get_fine_tuned_model(weights_path=wp, weight_epoch=we, num_classes=int(args.num_classes))
+    else:
+        print("pretrained model")
+        model, device = get_pretrained_model(weights_path=wp, weight_epoch=we)
+
     model.eval()
+
+    with open(wp + '/hyperparams.json') as json_file:
+        hyper_params = json.load(json_file)
 
     hyper_params['batch_size'] = batch_size
     train_loader, validation_loader = get_dataset_fine_tuning(ds=dataset, hyperparams=hyper_params)
@@ -297,37 +330,23 @@ if __name__ == '__main__':
     # acc = (out.argmax(dim=-1) == labels.to(device)).float().mean()
 
     name_exp = wp.split('/')[-1]  # nome cartella dell'esperimento (da cui ho preso i pesi per il modello)
-    atn_plots_path = os.path.join('./atn_plots', name_exp)
+    atn_plots_path = os.path.join(args.atn_plot_path, name_exp)
     if not os.path.exists(atn_plots_path):
         os.makedirs(atn_plots_path)
-    print("atn plots path: ", atn_plots_path)
+    print("atn plot path: ", atn_plots_path)
 
     # Heads visualization
-    heads_visualization(atn_wei_list, batch_index=0, save_path=atn_plots_path)
+    heads_visualization(atn_wei_list, batch_index=batch_index, chosen_image=images[batch_index],
+                        save_path=atn_plots_path + '/we_' + str(we))
     # heads_visualization(atn_wei_list, batch_index=2, save_path=atn_plots_path)
     # heads_visualization(atn_wei_list, batch_index=3, save_path=atn_plots_path)
 
     # Attention rollout
-    rollout_visualization(batch_index=0, save_path=atn_plots_path, filter=0, discard_ratio=0.9, head_fusion='min')
+    rollout_visualization(atn_wei_list=atn_wei_list, batch_index=batch_index, chosen_image=images[batch_index],
+                          save_path=atn_plots_path + '/we' + str(we), discard_ratio=float(args.discard_ratio),
+                          head_fusion=args.head_fusion)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    # Ex: python attention_plots.py --we 91 --head_fusion min
 
 
 
@@ -394,7 +413,6 @@ if __name__ == '__main__':
 #     ax.imshow(attn_heatmap)
 #
 # plt.show()
-
 
 
 # visualizzazione proposta in https://github.com/jacobgil/vit-explain/blob/main/vit_rollout.py (non mi piace)
@@ -464,12 +482,24 @@ if __name__ == '__main__':
 # _ = ax2.imshow(result)
 # plt.show()
 
-
-
-
-
-
-
-
-
-
+# embedding filters (non mi funziona)
+# fig = plt.figure(figsize=(4, 4))
+# f = filter[0:28]  # 28, 3, 8, 8
+# col = 7
+# rows = f.shape[0] // col + 1
+# from torch.nn.functional import normalize
+# import torchvision.transforms as transforms
+# tr = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+# for i in range(f.shape[0]):
+#     el = f[i]  # .permute(1, 2, 0)  # patch_size, patch_size, c
+#     ax = fig.add_subplot(4, 7, i+1)
+#     ax.axes.get_xaxis().set_visible(False)
+#     ax.axes.get_yaxis().set_visible(False)
+#
+#     el = el / torch.norm(el)  # normalize(el, p=1.0)
+#
+#     # el = tr(el)  # -1, 1
+#     # image = ((el * 0.5) + 0.5)  # 0, 1
+#     ax.imshow(el.permute(1, 2, 0).numpy())
+# plt.axis('off')
+# plt.show()
