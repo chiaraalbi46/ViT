@@ -1,31 +1,66 @@
 """  Linear and positional embedding weights plot """
 
 
-def transform_pca(filter, embed_dim, patch_size):
+def transform_pca(filter):
     from sklearn.decomposition import PCA
     import torch
-    pca = PCA()
 
-    filter = torch.reshape(filter, (embed_dim, -1))
-    filter = torch.transpose(filter, 0, 1)
-    filter = pca.fit_transform(filter)
-    filter = torch.from_numpy(filter)
-    filter = torch.transpose(filter, 0, 1)
-    filter = torch.reshape(filter, (embed_dim, 3, patch_size, patch_size))
+    """ Application of PCA to the linear embedding weights.
+
+    Parameters
+    ----------
+    filter : Tensor 
+            (e, c * p^2) tensor containing the weights
+    """
+
+    embed_dim, dim = filter.shape
+    patch_size = int((dim // 3) ** (1/2))
+
+    pca = PCA()  # keeps all the components
+
+    # fit_transform(X, y=None) - Xarray-like of shape (n_samples, n_features)
+
+    # filter = filter.reshape((embed_dim, -1))  # if filter is not (embed_dim, patch_size^2 * in_chans)
+    filter = filter.transpose(0, 1)  # (patch_size^2 * in_chans, embed_dim)
+    filter = torch.from_numpy(pca.fit_transform(filter))  # (patch_size^2 * in_chans, embed_dim)
+    filter = filter.transpose(0, 1)
+    filter = filter.reshape((embed_dim, 3, patch_size, patch_size))  # (embed_dim, in_chans, patch_size, patch_size)
 
     return filter
 
 
 def filter_visualization(tensor, num_comp, name, save_path, nrow=7, padding=1):
     import torchvision
+
+    """ Linear embedding weights visualization.
+
+    Parameters
+    ----------
+    tensor : Tensor 
+            (b, c, h, w) tensor containing the weights to visualize
+
+    num_comp : int
+            Number of principal components (pca) to visualize 
+
+    name: str
+            Additional info to plot in the title of the final image
+
+    save_path : str
+            Path to the location you want to save the plot
+
+    nrow : int
+            Number of images displayed in each row of the grid (for torchvision.utils.make_grid() function)
+
+    padding : int
+            Amount of padding (for torchvision.utils.make_grid() function)
+    """
+
     save_path = save_path + '_lin_embedding_weights.png'
 
     # check if the file exists
     if not os.path.exists(save_path):
-
         # Visualizzo solo le prime num_comp
-        filter = tensor[0:num_comp]
-
+        filter = tensor[0:num_comp]  # it is the same of doing transform_pca using PCA(n_components=num_comp)
         rows = filter.shape[0] // nrow + 1
         grid = torchvision.utils.make_grid(filter, nrow=nrow, normalize=True, padding=padding)  # c, h, w
         print(grid.shape)
@@ -39,6 +74,20 @@ def filter_visualization(tensor, num_comp, name, save_path, nrow=7, padding=1):
 
 def positional_embed_visualization(pos_embed, name, save_path):
     import torch.nn.functional as F
+
+    """ Positional embedding visualization.
+
+    Parameters
+    ----------
+    pos_embed : Tensor 
+            (b, c, h, w) tensor containing the position embeddings
+
+    name: str
+            Additional info to plot in the title of the final image
+
+    save_path : str
+            Path to the location you want to save the plot
+    """
 
     save_path = save_path + '_pos_embedding_weights.png'
 
@@ -63,14 +112,14 @@ def positional_embed_visualization(pos_embed, name, save_path):
 if __name__ == '__main__':
     # function()
     from utils import *
-    import json
     import matplotlib.pyplot as plt
     import os
     import argparse
 
     parser = argparse.ArgumentParser(description="Linear and positional embedding weights plot")
 
-    parser.add_argument("--model_weights_path", dest="model_weights_path", default='./model_weights/pretraining_imagenet'
+    parser.add_argument("--model_weights_path", dest="model_weights_path",
+                        default='./model_weights/pretraining_imagenet'
                         , help="path to the folder where are stored the weights of the model in exam (no final slash)")
     parser.add_argument("--weight_epoch", dest="weight_epoch", default=1,
                         help="epoch at which we recover the model weights")
@@ -97,16 +146,14 @@ if __name__ == '__main__':
         os.makedirs(pos_emb_path)
 
     model, _ = get_pretrained_model(weights_path=wp, weight_epoch=we)
-    with open(wp + '/hyperparams.json') as json_file:
-        hyper_params = json.load(json_file)
 
     # Visualize linear embedding weights
     le_weights = model.patch_embedding.linear_embedding.weight.cpu().detach()  # (embed_dim, patch_size^2 * in_chans)
-    filter = transform_pca(le_weights, embed_dim=hyper_params['embed_dim'], patch_size=hyper_params['patch_size'])
+    filter = transform_pca(le_weights)
     filter_visualization(tensor=filter, num_comp=int(args.num_comp), name='Epoch ' + str(we),
                          save_path=lin_emb_path + '/we_' + str(we))
 
     # Visualize position embedding similarities.
-    pe_weights = model.position_embedding.position_embedding.cpu().detach()  # (n_token, embed_dim)
-    positional_embed_visualization(pos_embed=pe_weights, name='Epoch ' + str(we),
+    pos_embed = model.position_embedding.position_embedding.cpu().detach()  # (n_token, embed_dim)
+    positional_embed_visualization(pos_embed=pos_embed, name='Epoch ' + str(we),
                                    save_path=pos_emb_path + '/we_' + str(we))

@@ -1,4 +1,5 @@
-""" Attention weights plot: Heads visualizationa and Attention rollout"""
+""" Attention weights plot: Heads visualization and Attention rollout"""
+
 
 def function():  # eventualmente per storico ... prende in ingresso i pckl, so l'iterazione, so l'epoca ...
     import torch
@@ -210,7 +211,7 @@ def rollout_visualization(atn_wei_list, batch_index, chosen_image, save_path, di
 
     Parameters
     ----------
-    atn_wei_list: list
+    atn_wei_list : list
             List of attention weights (len(atn_wei_list) = number of layers of the model)
             
     batch_index : int
