@@ -240,7 +240,7 @@ if __name__ == '__main__':
         if epoch % 10 == 0:
             torch.save(model.state_dict(), save_weights_path + '/weights_' + str(epoch + 1) + '.pth')
 
-    torch.save(model.state_dict(), save_weights_path + f"final.pth")
+    torch.save(model.state_dict(), save_weights_path + f"/final.pth")
 
     experiment.end()
     print("End training loop")
