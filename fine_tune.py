@@ -8,7 +8,7 @@ from get_dataset_dataloaders import *
 import argparse
 import numpy as np
 import os
-
+# from sched import CosineScheduler
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Fine tuning")
@@ -39,6 +39,11 @@ if __name__ == '__main__':
     parser.add_argument("--weight_decay", dest="weight_decay", default=0., help="weight decay")
     parser.add_argument("--scheduling", dest="scheduling", default=0,
                         help="1 if scheduling lr policy applied, 0 otherwise")
+    parser.add_argument("--pct_start", dest="pct_start", default=0.05,
+                        help="% of the cycle (in number of steps) spent increasing the learning rate")
+    parser.add_argument("--anneal_strategy", dest="anneal_strategy", default='cos',
+                        help="{‘cos’, ‘linear’} specifies the annealing strategy: “cos” for cosine annealing, "
+                             "“linear” for linear annealing")
     parser.add_argument("--drop", dest="drop", default=0., help="dropout value train")
 
     # rand augmentation
@@ -131,19 +136,17 @@ if __name__ == '__main__':
 
     # Definizione ottimizzatore
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
+    # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)  # weight_decay=wd
 
     if sched == 1:
         print("Scheduling of learning rate applied")
-        # Definizione scheduler
-        # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer=optimizer, max_lr=lr, pct_start=0.05,
-        #                                                 total_steps=len(train_loader) * num_epochs,
-        #                                                 anneal_strategy='linear')
 
-        # cosine for fine tuning
-        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer=optimizer, max_lr=lr, pct_start=0.05,
+        # Definizione scheduler
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer=optimizer, max_lr=lr, pct_start=float(args.pct_start),
                                                         total_steps=len(train_loader) * num_epochs,
-                                                        anneal_strategy='cos')
-        # anche pct_start dovrebbe essere iperparametro ...
+                                                        anneal_strategy=args.anneal_strategy)
+        # scheduler = CosineScheduler(max_update=20, base_lr=lr, final_lr=0)
+        # scheduler = CosineScheduler(optimizer=optimizer, max_update=40, base_lr=lr, final_lr=0)
 
     # Definizione loss
     loss = torch.nn.CrossEntropyLoss()
@@ -205,6 +208,7 @@ if __name__ == '__main__':
                 # rl = scheduler.get_last_lr()  # anche optimizer.param_groups[0]["lr"] va bene
                 # # experiment.log_metric('learning_rate_batch_sched', rl, step=it)
                 scheduler.step()
+                # scheduler.step(epoch=epoch+1)
 
         if sched == 1:
             experiment.log_metric('learning_rate_epoch', rl, step=epoch + 1)  # the last batch learning rate
