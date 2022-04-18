@@ -45,8 +45,8 @@ if __name__ == '__main__':
     parser.add_argument("--name_exp", dest="name_exp", default='None', help="define comet ml experiment")
     parser.add_argument("--comments", dest="comments", default=None, help="comments (str) about the experiment")
 
-    parser.add_argument("--atn_path", dest="atn_path", default=None,
-                        help="path to the folder where storing the attention weights")
+    # parser.add_argument("--atn_path", dest="atn_path", default=None,
+    #                     help="path to the folder where storing the attention weights")
     parser.add_argument("--weights_path", dest="weights_path", default=None,
                         help="path to the folder where storing the model weights")
     parser.add_argument("--dataset", dest="dataset", default='../Vit_vs_mlp_mixer/datasets/cifar100',
@@ -108,10 +108,10 @@ if __name__ == '__main__':
     with open(save_weights_path + '/hyperparams.json', "w") as outfile:
         json.dump(hyper_params, outfile, indent=4)
 
-    atn_weights_path = os.path.join(args.atn_path, args.name_exp)
-    if not os.path.exists(atn_weights_path):
-        os.makedirs(atn_weights_path)
-    print("atn weights: ", atn_weights_path)
+    # atn_weights_path = os.path.join(args.atn_path, args.name_exp)
+    # if not os.path.exists(atn_weights_path):
+    #     os.makedirs(atn_weights_path)
+    # print("atn weights: ", atn_weights_path)
 
     # Dataset, dataloaders
     train_loader, validation_loader = get_dataset(ds=args.dataset, hyperparams=hyper_params,
@@ -147,14 +147,14 @@ if __name__ == '__main__':
         experiment.log_other('comments', args.comments)
 
     print("Start training loop")
-    atn_save = False
+    # atn_save = False
 
     for epoch in range(num_epochs):
         vit.train()  # Sets the module in training mode
 
-        if epoch == 0 or (epoch + 1) % num_plots == 0:
-            print("Save the attention weights of the first batch")
-            atn_save = True
+        # if epoch == 0 or (epoch + 1) % num_plots == 0:
+        #     print("Save the attention weights of the first batch")
+        #     atn_save = True
 
         # batch training
         train_losses = []
@@ -212,12 +212,12 @@ if __name__ == '__main__':
 
                 val_out, val_atn_weights_list = vit(val_images)
 
-                if val_it == 0 and atn_save:
-                    print("Saving val atn weights list")
-                    f = open(os.path.join(atn_weights_path, 'atn_epoch_' + str(epoch) + '_it_0' + '.pckl'), 'wb')
-                    pickle.dump(val_atn_weights_list, f)
-                    f.close()
-                    atn_save = False
+                # if val_it == 0 and atn_save:
+                #     print("Saving val atn weights list")
+                #     f = open(os.path.join(atn_weights_path, 'atn_epoch_' + str(epoch) + '_it_0' + '.pckl'), 'wb')
+                #     pickle.dump(val_atn_weights_list, f)
+                #     f.close()
+                #     atn_save = False
 
                 val_loss = loss(val_out, val_labels)
                 val_losses.append(val_loss.item())
