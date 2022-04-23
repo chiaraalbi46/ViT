@@ -4,11 +4,10 @@ from comet_ml import Experiment
 import torch
 import json
 from vit import ViT
-from get_dataset_dataloaders import *
+from get_dataset_dataloaders import get_dataset_fine_tuning
 import argparse
 import numpy as np
 import os
-# from sched import CosineScheduler
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Fine tuning")
@@ -27,13 +26,9 @@ if __name__ == '__main__':
     parser.add_argument("--name_proj", dest="name_proj", default='VIT', help="define comet ml project folder")
     parser.add_argument("--name_exp", dest="name_exp", default='None', help="define comet ml experiment")
     parser.add_argument("--comments", dest="comments", default=None, help="comments (str) about the experiment")
-    # parser.add_argument("--atn_path", dest="atn_path", default=None,
-    #                     help="path to the folder where storing the attention weights")
 
-    # parametri fine tuning
+    # fine tuning hyper-params
     parser.add_argument("--epochs", dest="epochs", default=1, help="number of epochs")
-    # parser.add_argument("--plot_step", dest="plot_step", default=2,
-    #                     help="number of attention weights savings during train")
     parser.add_argument("--batch_size", dest="batch_size", default=250, help="Batch size")
     parser.add_argument("--lr", dest="lr", default=0.001, help="learning rate train")
     parser.add_argument("--weight_decay", dest="weight_decay", default=0., help="weight decay")
@@ -53,10 +48,6 @@ if __name__ == '__main__':
                         help="magnitude for all the transformations")
 
     args = parser.parse_args()
-
-    # path al file contenente i pesi del modello
-    # assumi che il dizionario con gli iperparametri venga salvato nella cartella in cui vengono salvati i pesi
-    # dell'esperim (weights_path/nome_exp/...)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -117,6 +108,12 @@ if __name__ == '__main__':
         model.load_state_dict(torch.load(weights_path + '/weights_' + str(args.weight_epoch) + '.pth'))
 
     model.eval()
+    # print(model.patch_embedding.linear_embedding.weight.requires_grad)
+
+    # if you want to freeze the model and train only the linear classifier
+    # for param in model.parameters():
+    #     param.requires_grad = False
+    # print(model.patch_embedding.linear_embedding.weight.requires_grad)
 
     train_loader, validation_loader = get_dataset_fine_tuning(ds=args.dataset, hyperparams=hyper_params_ft)
     num_in_features = model.embed_dim
@@ -124,34 +121,32 @@ if __name__ == '__main__':
     # add new learnable linear layer
     model.mlp_head = torch.nn.Linear(num_in_features, int(args.num_classes))
     model.to(device)
+    # print(model.mlp_head.weight.requires_grad)
     # print(model)
 
-    # training loop
+    # Training loop
 
-    # comet ml integration
+    # Comet ml integration
     experiment = Experiment(project_name=args.name_proj)
     experiment.set_name(args.name_exp)
     experiment.log_parameters(hyper_params_ft)  # gli iperparameteri di finetuning
     # experiment.set_model_graph(model)
 
-    # Definizione ottimizzatore
+    # Optimizer def
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
-    # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)  # weight_decay=wd
 
     if sched == 1:
         print("Scheduling of learning rate applied")
 
-        # Definizione scheduler
+        # Scheduler def
         scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer=optimizer, max_lr=lr, pct_start=float(args.pct_start),
                                                         total_steps=len(train_loader) * num_epochs,
                                                         anneal_strategy=args.anneal_strategy)
-        # scheduler = CosineScheduler(max_update=20, base_lr=lr, final_lr=0)
-        # scheduler = CosineScheduler(optimizer=optimizer, max_update=40, base_lr=lr, final_lr=0)
 
-    # Definizione loss
+    # Loss def
     loss = torch.nn.CrossEntropyLoss()
 
-    # Conteggio parametri
+    # Parameters counter
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())  # [x for x in net.parameters()]
     params = sum([np.prod(p.size()) for p in model_parameters])
     print("Number of parameters: ", params)
@@ -163,10 +158,6 @@ if __name__ == '__main__':
     print("Start training (fine tuning) loop")
     for epoch in range(num_epochs):
         model.train()  # Sets the module in training mode
-
-        # if epoch == 0 or (epoch + 1) % num_plots == 0:
-        #     print("Save the attention weights of the first batch")
-        #     atn_save = True
 
         # batch training
         train_losses = []
@@ -181,13 +172,6 @@ if __name__ == '__main__':
 
             # prediction
             out, atn_weights_list = model(train_images)  # (batch_size, num_classes)
-
-            # if it == 0 and atn_save:
-            #     print("Saving ")
-            #     f = open(os.path.join(atn_weights_path, 'atn_epoch_' + str(epoch) + '_it_0' + '.pckl'), 'wb')
-            #     pickle.dump([atn_weights_list], f)
-            #     f.close()
-            #     atn_save = False
 
             # compute loss
             train_loss = loss(out, train_labels)  # batch loss
@@ -205,10 +189,7 @@ if __name__ == '__main__':
             rl = optimizer.param_groups[0]["lr"]
 
             if sched == 1:
-                # rl = scheduler.get_last_lr()  # anche optimizer.param_groups[0]["lr"] va bene
-                # # experiment.log_metric('learning_rate_batch_sched', rl, step=it)
                 scheduler.step()
-                # scheduler.step(epoch=epoch+1)
 
         if sched == 1:
             experiment.log_metric('learning_rate_epoch', rl, step=epoch + 1)  # the last batch learning rate
@@ -249,15 +230,6 @@ if __name__ == '__main__':
     experiment.end()
     print("End training loop")
 
-    # Ex: python fine_tune.py --weight_epoch 151 --dataset C:\Users\chiar\PycharmProjects\ViT\cifar100_data --num_classes 100
-    # --exp pretraining_imagenet --comments 'fine tuning on CIFAR 100' --name_exp ft_cifar100 --batch_size 250
-    # --lr 0.001 --weight_decay 0.0001 --epochs 200
-
-
-
-
-
-
-
-
-
+    # Ex: python fine_tune.py --weight_epoch 151 --dataset C:\Users\chiar\PycharmProjects\ViT\cifar100_data
+    # --num_classes 100 --exp pretraining_imagenet --comments 'fine tuning on CIFAR 100' --name_exp ft_cifar100
+    # --batch_size 250 --lr 0.001 --weight_decay 0.0001 --epochs 200

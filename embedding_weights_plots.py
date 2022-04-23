@@ -1,5 +1,9 @@
 """  Linear and positional embedding weights plot """
 
+# The implementations are based on these links:
+# https://colab.research.google.com/github/hirotomusiker/schwert_colab_data_storage/blob/master/notebook/Vision_Transformer_Tutorial.ipynb#scrollTo=txIf-L2Fwoxy
+# https://github.com/ra1ph2/Vision-Transformer/blob/main/Pretrained_ViT.ipynb
+
 
 def transform_pca(filter):
     from sklearn.decomposition import PCA
@@ -121,7 +125,7 @@ if __name__ == '__main__':
     parser.add_argument("--model_weights_path", dest="model_weights_path",
                         default='./model_weights/pretraining_imagenet'
                         , help="path to the folder where are stored the weights of the model in exam (no final slash)")
-    parser.add_argument("--weight_epoch", dest="weight_epoch", default=1,
+    parser.add_argument("--weight_epoch", dest="weight_epoch", default=261,
                         help="epoch at which we recover the model weights")
     parser.add_argument("--num_comp", dest="num_comp", default=28,
                         help="number of principal components to visualize for linear embedding weights plot")
@@ -149,6 +153,7 @@ if __name__ == '__main__':
 
     # Visualize linear embedding weights
     le_weights = model.patch_embedding.linear_embedding.weight.cpu().detach()  # (embed_dim, patch_size^2 * in_chans)
+    # the learnable weights of the model have shape (out_features, in_features)
     filter = transform_pca(le_weights)
     filter_visualization(tensor=filter, num_comp=int(args.num_comp), name='Epoch ' + str(we),
                          save_path=lin_emb_path + '/we_' + str(we))

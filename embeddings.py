@@ -109,13 +109,13 @@ if __name__ == '__main__':
     c = 3
     img_size = (200, 200)  # h, w
     patch_size = 50
-    embed_dim = 50
+    embed_dim = 60
 
     image = cv2.imread("./imgs/prova_patch.jpg")  # 200, 200, 3
     ima = torch.from_numpy(image)
     ima = torch.unsqueeze(ima, 0)
-    cv2.imshow("Test Image", image)
-    cv2.waitKey(0)
+    # cv2.imshow("Test Image", image)
+    # cv2.waitKey(0)
 
     im = ima.permute(0, 3, 1, 2).float()
 

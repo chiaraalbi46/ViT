@@ -3,7 +3,6 @@ import os.path
 import torch
 from get_dataset_dataloaders import get_dataset
 import argparse
-import pickle
 import json
 import numpy as np
 from vit import ViT
@@ -13,13 +12,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Train ViT")
 
     parser.add_argument("--epochs", dest="epochs", default=1, help="number of epochs")
-    parser.add_argument("--plot_step", dest="plot_step", default=2,
-                        help="number of attention weights savings during train")
     parser.add_argument("--batch_size", dest="batch_size", default=250, help="Batch size")
     parser.add_argument("--lr", dest="lr", default=0.001, help="learning rate train")
     parser.add_argument("--weight_decay", dest="weight_decay", default=0., help="weight decay")
     parser.add_argument("--scheduling", dest="scheduling", default=0,
                         help="1 if scheduling lr policy applied, 0 otherwise")
+    parser.add_argument("--pct_start", dest="pct_start", default=0.05,
+                        help="% of the cycle (in number of steps) spent increasing the learning rate")
+    parser.add_argument("--anneal_strategy", dest="anneal_strategy", default='cos',
+                        help="{‘cos’, ‘linear’} specifies the annealing strategy: “cos” for cosine annealing, "
+                             "“linear” for linear annealing")
     parser.add_argument("--drop", dest="drop", default=0.0, help="dropout value train")
     parser.add_argument("--val_perc", dest="val_perc", default=0, help="% validation set")
 
@@ -45,8 +47,6 @@ if __name__ == '__main__':
     parser.add_argument("--name_exp", dest="name_exp", default='None', help="define comet ml experiment")
     parser.add_argument("--comments", dest="comments", default=None, help="comments (str) about the experiment")
 
-    # parser.add_argument("--atn_path", dest="atn_path", default=None,
-    #                     help="path to the folder where storing the attention weights")
     parser.add_argument("--weights_path", dest="weights_path", default=None,
                         help="path to the folder where storing the model weights")
     parser.add_argument("--dataset", dest="dataset", default='../Vit_vs_mlp_mixer/datasets/cifar100',
@@ -54,7 +54,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    # Iperparametri
+    # Hyper-parameters
     batch_size = int(args.batch_size)
     num_epochs = int(args.epochs)
     plot_step = int(args.plot_step)
@@ -86,7 +86,7 @@ if __name__ == '__main__':
         "rand_aug_magn": magn
     }
 
-    # comet ml integration
+    # Comet ml integration
     experiment = Experiment(project_name=args.name_proj)
     experiment.set_name(args.name_exp)
 
@@ -108,36 +108,27 @@ if __name__ == '__main__':
     with open(save_weights_path + '/hyperparams.json', "w") as outfile:
         json.dump(hyper_params, outfile, indent=4)
 
-    # atn_weights_path = os.path.join(args.atn_path, args.name_exp)
-    # if not os.path.exists(atn_weights_path):
-    #     os.makedirs(atn_weights_path)
-    # print("atn weights: ", atn_weights_path)
-
     # Dataset, dataloaders
     train_loader, validation_loader = get_dataset(ds=args.dataset, hyperparams=hyper_params,
                                                   val_perc=int(args.val_perc))
 
-    # Definizione ottimizzatore
+    # Optimizer def
     optimizer = torch.optim.Adam(vit.parameters(), lr=lr, weight_decay=wd)
 
     if sched == 1:
         print("Scheduling of learning rate applied")
-        # Definizione scheduler
-        # ws = 10000
-        # pct_start = ws / (len(train_loader) * num_epochs)
-        # print("pct start: ", pct_start)
-        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer=optimizer, max_lr=lr, pct_start=0.05,  # 0.05
+        # Scheduler def
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer=optimizer, max_lr=lr, pct_start=float(args.pct_start),
                                                         total_steps=len(train_loader) * num_epochs,
-                                                        anneal_strategy='cos')
-        # anche pct_start dovrebbe essere iperparametro ...
+                                                        anneal_strategy=args.anneal_strategy)
 
-    # Definizione loss
+    # Loss def
     loss = torch.nn.CrossEntropyLoss()
 
     # Model to GPU
     vit = vit.to(device)
 
-    # Conteggio parametri
+    # Parameters counter
     model_parameters = filter(lambda p: p.requires_grad, vit.parameters())  # [x for x in net.parameters()]
     params = sum([np.prod(p.size()) for p in model_parameters])
     print("Number of parameters: ", params)
@@ -147,14 +138,9 @@ if __name__ == '__main__':
         experiment.log_other('comments', args.comments)
 
     print("Start training loop")
-    # atn_save = False
 
     for epoch in range(num_epochs):
         vit.train()  # Sets the module in training mode
-
-        # if epoch == 0 or (epoch + 1) % num_plots == 0:
-        #     print("Save the attention weights of the first batch")
-        #     atn_save = True
 
         # batch training
         train_losses = []
@@ -169,13 +155,6 @@ if __name__ == '__main__':
 
             # prediction
             out, atn_weights_list = vit(train_images)  # (batch_size, num_classes)
-
-            # if it == 0 and atn_save:
-            #     print("Saving ")
-            #     f = open(os.path.join(atn_weights_path, 'atn_epoch_' + str(epoch) + '_it_0' + '.pckl'), 'wb')
-            #     pickle.dump(atn_weights_list, f)
-            #     f.close()
-            #     atn_save = False
 
             # compute loss
             train_loss = loss(out, train_labels)  # batch loss
@@ -212,13 +191,6 @@ if __name__ == '__main__':
 
                 val_out, val_atn_weights_list = vit(val_images)
 
-                # if val_it == 0 and atn_save:
-                #     print("Saving val atn weights list")
-                #     f = open(os.path.join(atn_weights_path, 'atn_epoch_' + str(epoch) + '_it_0' + '.pckl'), 'wb')
-                #     pickle.dump(val_atn_weights_list, f)
-                #     f.close()
-                #     atn_save = False
-
                 val_loss = loss(val_out, val_labels)
                 val_losses.append(val_loss.item())
 
@@ -245,6 +217,6 @@ if __name__ == '__main__':
     print("End training loop")
 
     # Ex: python main.py --epochs 12 --dataset  C:\Users\chiar\PycharmProjects\ViT\cifar100_data --num_heads 12
-    # --hidden_dim 384 --batch_size 128 --num_classes 100 --name_exp cifar100_tanh
-    # --comments 'mlp head with tanh (no layer norm)'
+    # --num_layers 7 --embed_dim 384 --hidden_dim 384 --batch_size 250 --num_classes 100 --name_exp check
+    # --weights_path ./model_weights --comments 'check the code'
 

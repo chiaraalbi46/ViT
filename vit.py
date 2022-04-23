@@ -5,9 +5,8 @@ import torch
 from embeddings import PatchEmbedding, PositionEmbedding
 
 
-# todo: questione pretraining / fine tuning per mlp - layer norm
-
-# NB: dropout_value = 0.0 --> non viene applicato
+# NB: dropout_value = 0.0 --> no dropout application
+# NB: define nn.Dropout in __init__() --> in this way it is responsive for calling eval()
 
 
 class MultiHeadAttention(nn.Module):
